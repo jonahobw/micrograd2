@@ -53,8 +53,8 @@ print(total_loss, accuracy)
 
 # optimization
 learning_rate = 0.005
-batch_size = 10
-for k in range(100):
+batch_size = 20
+for k in range(50):
 
     lr = learning_rate * 1/(1+0.01*k)
     model.reset_grad()

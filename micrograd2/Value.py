@@ -39,14 +39,14 @@ class Op(ABC):
 
 class IdentityOp(Op):
     def __init__(self, operand):
-        super().__init__(operand, 1)
+        super().__init__([operand], 1)
         self.opName = "identity"
 
     def forward(self):
         return self.operands[0].val
 
     def backward(self, prev_grad=1):
-        return prev_grad
+        self.operands[0] +=  prev_grad
 
 
 class AddOp(Op):
@@ -60,7 +60,8 @@ class AddOp(Op):
     def backward(self, prev_grad=1):
         for value in self.operands:
             value.grad += prev_grad
-    
+
+
 class MulOp(Op):
     def __init__(self, operands):
         super().__init__(operands, 2)
@@ -72,6 +73,7 @@ class MulOp(Op):
     def backward(self, prev_grad=1):
         self.operands[0].grad += prev_grad * self.operands[1].val
         self.operands[1].grad += prev_grad * self.operands[0].val
+
 
 class DivOp(Op):
     def __init__(self, operands):
@@ -87,13 +89,13 @@ class DivOp(Op):
         if self.operands[1].val == 0:
             raise ValueError("Cannot compute gradient for division by zero")
         values = [x.val for x in self.operands]
-        self.operands[0].grad += prev_grad/values[1]
+        self.operands[0].grad += prev_grad / values[1]
         self.operands[1].grad += -1 * values[0] * prev_grad / (values[1] ** 2)
 
 
 class PowOp(Op):
     def __init__(self, operand, exponent):
-        super().__init__(operand, 1)
+        super().__init__([operand], 1)
         self.opName = f"^{exponent}"
         self.exponent = exponent
 
@@ -103,11 +105,14 @@ class PowOp(Op):
     def backward(self, prev_grad=1):
         n = self.exponent
         a = self.operands[0].val
+        if a == 0.0 and n <= 0:
+            return # cannot raise 0 to a negative power
         self.operands[0].grad += prev_grad * n * (a ** (n - 1))
+
 
 class ReluOp(Op):
     def __init__(self, operand):
-        super().__init__(operand, 1)
+        super().__init__([operand], 1)
         self.opName = "ReLU"
 
     def forward(self):
@@ -117,16 +122,34 @@ class ReluOp(Op):
         if self.operands[0].val > 0:
             self.operands[0].grad += prev_grad
 
+
 class SigmoidOp(Op):
     def __init__(self, operand):
-        super().__init__(operand, 1)
+        super().__init__([operand], 1)
         self.opName = "Sigmoid"
+        self.memory = None
 
     def forward(self):
-        return 1 / (1 + math.exp(-self.operands[0].val))
+        self.memory =  1 / (1 + math.exp(-self.operands[0].val))
+        return self.memory
 
     def backward(self, prev_grad=1):
-        self.operands[0].grad += prev_grad * self.operands[0].val * (1 - self.operands[0].val)
+        self.operands[0].grad += prev_grad * self.memory * (1 - self.memory)
+
+
+class AbsOp(Op):
+    def __init__(self, operand):
+        super().__init__([operand], 1)
+        self.opName = "abs"
+
+    def forward(self):
+        return abs(self.operands[0].val)
+
+    def backward(self, prev_grad=1):
+        if self.operands[0].val > 0:
+            self.operands[0].grad += prev_grad
+        elif self.operands[0].val < 0:
+            self.operands[0].grad -= prev_grad
 
 class Value:
     """Represents a value in the computational graph with automatic differentiation.
@@ -144,13 +167,13 @@ class Value:
     def __init__(self, val: Union[int, float], op: Optional[Op] = None, 
                  children: Tuple['Value', ...] = (), name: Optional[str] = None) -> None:
         self.val: float = float(val)
-        assert isinstance(val, (int, float)), "Value must be a number"
-        self.op: Op = op if op else IdentityOp((self,))
+        assert isinstance(self.val, (int, float)), "Value must be a number"
+        self.op: Op = op if op else IdentityOp(self)
         self.children: Tuple['Value', ...] = children
         self.grad: float = 0.0
-        self.name: str = self.setName(name)
+        self.setName(name)
 
-    def setName(self, name: Optional[str]) -> str:
+    def setName(self, name: Optional[str]) -> None:
         """Set a unique name for this value.
         
         Args:
@@ -171,10 +194,11 @@ class Value:
             Value.varNum += 1
 
         if name in self.varNames:
-            raise ValueError(f"Name {name} already exists.")
-        else:
-            self.varNames.add(name)
-        return name
+            # raise ValueError(f"Name {name} already exists.")
+            RuntimeWarning(f"Name {name} already exists.")
+        self.varNames.add(name)
+        
+        self.name = name
 
     def detach(self) -> None:
         """Detach this value from the computational graph.
@@ -184,7 +208,7 @@ class Value:
         """
         if self.name in self.varNames:
             self.varNames.remove(self.name)
-        self.op = IdentityOp((self,))
+        self.op = IdentityOp(self)
         self.children = ()
         self.grad = 0.0
 
@@ -192,7 +216,7 @@ class Value:
         self.grad = 0
         if recursively:
             for child in self.children:
-                child.reset(recursively=True)
+                child.reset_grad(recursively=True)
     
     def topologicalSort(self):
         seen = set()
@@ -228,10 +252,17 @@ class Value:
             value.op.backward(prev_grad=value.grad)
     
     def relu(self):
-        return Value(max(0, self.val), op=ReluOp((self,)), children=(self,))
+        new_val = Value(0, op=ReluOp(self), children=(self,))
+        new_val.forward(recursively=False)
+        return new_val
     
     def sigmoid(self):
-        new_val = Value(0, op=SigmoidOp((self,)), children=(self,))
+        new_val = Value(0, op=SigmoidOp(self), children=(self,))
+        new_val.forward(recursively=False)
+        return new_val
+    
+    def abs(self):
+        new_val = Value(0, op=AbsOp(self), children=(self,))
         new_val.forward(recursively=False)
         return new_val
 
@@ -243,18 +274,18 @@ class Value:
 
     def __mul__(self, other):
         other = other if isinstance(other, Value) else Value(other)
-        new_val = Value(self.val * other.val, op=MulOp((self, other)), children=(self, other))
+        new_val = Value(0, op=MulOp((self, other)), children=(self, other))
         new_val.forward(recursively=False)
         return new_val
     
     def __truediv__(self, other):
         other = other if isinstance(other, Value) else Value(other)
-        new_val = Value(self.val/other.val, op=DivOp((self, other)), children=(self, other))
+        new_val = Value(0, op=DivOp((self, other)), children=(self, other))
         new_val.forward(recursively=False)
         return new_val
     
     def __pow__(self, exponent):
-        new_val = Value(self.val ** exponent, op=PowOp((self,), exponent), children=(self,))
+        new_val = Value(0, op=PowOp(self, exponent), children=(self,))
         new_val.forward(recursively=False)
         return new_val
     
@@ -273,22 +304,35 @@ class Value:
     def __rmul__(self, other):
         return self * other
 
-    def __rtruediv__(self, other): # other / self
+    def __rtruediv__(self, other):  # other / self
         return other * self**-1
     
     def draw_dot(root, format='png', rankdir='LR'):
-        """
-        format: png | svg | ...
-        rankdir: TB (top to bottom graph) | LR (left to right)
+        """Draw the computational graph using graphviz.
+        
+        Args:
+            format: Output format (png, svg, etc.)
+            rankdir: Graph direction (LR for left-to-right, TB for top-to-bottom)
+            
+        Returns:
+            Digraph: The graphviz dot object
         """
         assert rankdir in ['LR', 'TB']
         nodes, edges = trace(root)
         dot = Digraph(format=format, graph_attr={'rankdir': rankdir}) 
         
         for n in nodes:
-            dot.node(name=str(id(n)), label = "{ %s | val %.4f | grad %.4f }" % (n.name, n.val, n.grad), shape='record')
+            dot.node(
+                name=str(id(n)), 
+                label="{ %s | val %.4f | grad %.4f }" % (n.name, n.val, n.grad), 
+                shape='record'
+            )
             if not isinstance(n.op, IdentityOp):
-                dot.node(name=str(id(n)) + n.op.opName, label=n.op.opName, shape='ellipse')
+                dot.node(
+                    name=str(id(n)) + n.op.opName, 
+                    label=n.op.opName, 
+                    shape='ellipse'
+                )
                 dot.edge(str(id(n)) + n.op.opName, str(id(n)))
         
         for n1, n2 in edges:
@@ -310,6 +354,14 @@ class Value:
 
 
 def trace(root):
+    """Trace the computational graph.
+    
+    Args:
+        root: The root value of the graph
+        
+    Returns:
+        Tuple[Set[Value], Set[Tuple[Value, Value]]]: Nodes and edges of the graph
+    """
     nodes, edges = set(), set()
     def build(v):
         if v not in nodes:
