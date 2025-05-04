@@ -11,6 +11,7 @@ from .base import Op
 
 class ReluOp(Op):
     """Rectified Linear Unit (ReLU) activation function."""
+
     def __init__(self, operand: Value) -> None:
         super().__init__([operand], 1)
         self.opName = "ReLU"
@@ -22,8 +23,10 @@ class ReluOp(Op):
         if self.operands[0].val > 0:
             self.operands[0].grad += prev_grad
 
+
 class SigmoidOp(Op):
     """Sigmoid activation function."""
+
     def __init__(self, operand: Value) -> None:
         super().__init__([operand], 1)
         self.opName = "Sigmoid"
@@ -33,4 +36,4 @@ class SigmoidOp(Op):
 
     def backward(self, prev_grad: float = 1.0) -> None:
         sigmoid_val = self.forward()
-        self.operands[0].grad += prev_grad * sigmoid_val * (1 - sigmoid_val) 
+        self.operands[0].grad += prev_grad * sigmoid_val * (1 - sigmoid_val)

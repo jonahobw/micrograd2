@@ -16,7 +16,7 @@ class Neuron:
         for w in self.w:
             w.val = np.random.normal(mean, std)
         self.b.val = np.random.normal(mean, std)
-    
+
     def initializeUniform(self, lo=-1.0, hi=1.0):
         for w in self.w:
             w.val = random.uniform(lo, hi)
@@ -40,6 +40,7 @@ class Neuron:
 
     def __call__(self, x):
         return self.forward(x)
+
 
 class NeuronOld:
     def __init__(self, nin, activation="relu"):
@@ -66,7 +67,7 @@ class NeuronOld:
         for (xi, inp) in zip(x, self.inp):
             inp.val = xi
         return self.out.forward()
-    
+
     def backward(self, prev_grad):
         self.out.backward(prev_grad)
 
@@ -78,7 +79,8 @@ class NeuronOld:
 
     def __call__(self, x):
         return self.forward(x)
-    
+
+
 class Layer:
     def __init__(self, nin, nout, activation="relu"):
         self.neurons = [Neuron(nin, activation=activation) for _ in range(nout)]
@@ -86,33 +88,33 @@ class Layer:
     def initializeGaussian(self, mean=0.0, std=0.01):
         for n in self.neurons:
             n.initializeGaussian(mean, std)
-    
+
     def initializeUniform(self, lo=-1.0, hi=1.0):
         for n in self.neurons:
             n.initializeUniform(lo, hi)
-        
+
     def forward(self, x):
         out = [n(x) for n in self.neurons]
         # out = []
         # for n in self.neurons:
         #     print(f"Neuron: {n}")
         #     n_out = n(x)
-        #     out.append(n_out) 
+        #     out.append(n_out)
         return out[0] if len(out) == 1 else out
-    
+
     def backward(self, prev_grad):
         for neuron in self.neurons:
             neuron.backward(prev_grad)
-    
+
     def parameters(self):
         return [p for n in self.neurons for p in n.parameters()]
 
     def __call__(self, x):
         return self.forward(x)
-    
+
     def __repr__(self):
         return f"Layer(nin={len(self.neurons[0].w)}, nout={len(self.neurons)})"
-    
+
 
 class MLP:
     def __init__(self, nin, nouts, hidden_layer_sizes, activation="relu"):
@@ -127,7 +129,7 @@ class MLP:
     def initializeGaussian(self, mean=0.0, std=0.01):
         for layer in self.layers:
             layer.initializeGaussian(mean, std)
-    
+
     def initializeUniform(self, lo=-1.0, hi=1.0):
         for layer in self.layers:
             layer.initializeUniform(lo, hi)
@@ -144,17 +146,16 @@ class MLP:
             # print(f"Layer {i}")
             x = layer(x)
         return x
-    
+
     def parameters(self):
         return [p for layer in self.layers for p in layer.parameters()]
-    
+
     def reset_grad(self):
         for p in self.parameters():
             p.reset_grad(recursively=False)
-    
+
     def __repr__(self):
         return f"MLP of [{', '.join(str(layer) for layer in self.layers)}]"
-    
+
     def __call__(self, x):
         return self.forward(x)
-        

@@ -41,9 +41,7 @@ class PolynomialRegressionModel:
             )
 
 
-def generateData(
-    numDataPoints, degree, xRange=None, noise_range=None, coefRange=None
-):
+def generateData(numDataPoints, degree, xRange=None, noise_range=None, coefRange=None):
     if not xRange:
         xRange = 5
     if not noise_range:
@@ -51,9 +49,7 @@ def generateData(
     if not coefRange:
         coefRange = 1
 
-    coefficients = (
-        np.random.random(degree + 1) * 2 * coefRange - coefRange
-    )
+    coefficients = np.random.random(degree + 1) * 2 * coefRange - coefRange
     x = np.linspace(-xRange, xRange, numDataPoints)
     y = np.zeros_like(x)
     for degree in range(degree + 1):
