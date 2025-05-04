@@ -4,8 +4,10 @@ This module contains basic arithmetic operations like add, multiply, divide, and
 """
 import math
 from typing import List
-from .base import Op
+
 from ..value import Value
+from .base import Op
+
 
 class IdentityOp(Op):
     """Identity operation that returns its input unchanged."""

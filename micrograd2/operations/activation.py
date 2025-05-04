@@ -4,8 +4,10 @@ This module contains activation functions like ReLU and Sigmoid.
 """
 import math
 from typing import List
-from .base import Op
+
 from ..value import Value
+from .base import Op
+
 
 class ReluOp(Op):
     """Rectified Linear Unit (ReLU) activation function."""

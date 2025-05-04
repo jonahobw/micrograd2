@@ -1,11 +1,11 @@
+import random
+
 import matplotlib.pyplot as plt
+import numpy as np
 from sklearn.datasets import make_moons
 
-import random
-import numpy as np
-
-from micrograd2.Value import Value
 from micrograd2.nn import MLP
+from micrograd2.Value import Value
 
 np.random.seed(1337)
 random.seed(1337)

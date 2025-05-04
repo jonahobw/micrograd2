@@ -4,7 +4,9 @@ This module contains the base operation class that all other operations inherit 
 """
 from abc import ABC, abstractmethod
 from typing import List, Optional
+
 from ..value import Value
+
 
 class Op(ABC):
     """Base class for all operations in the computational graph.

@@ -1,6 +1,9 @@
-import numpy as np
 import random
+
+import numpy as np
+
 from micrograd2.Value import Value
+
 
 class Neuron:
     def __init__(self, nin, activation="relu"):

@@ -2,11 +2,13 @@
 
 This module contains functions for visualizing the computational graph.
 """
-from graphviz import Digraph
 from typing import Set, Tuple
+
+from graphviz import Digraph
 
 from ..operations.arithmetic import IdentityOp
 from ..value import Value
+
 
 def trace(root: Value) -> Tuple[Set[Value], Set[Tuple[Value, Value]]]:
     """Trace the computational graph from a root value.

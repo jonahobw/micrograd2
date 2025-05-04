@@ -2,9 +2,8 @@
 A simple linear regression example using micrograd
 """
 
-import numpy as np
 import matplotlib.pyplot as plt
-
+import numpy as np
 from micrograd.Value import Value
 
 # Generate random data

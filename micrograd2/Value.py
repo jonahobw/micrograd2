@@ -1,7 +1,8 @@
-from abc import ABC, abstractmethod
 import math
+from abc import ABC, abstractmethod
+from typing import List, Optional, Set, Tuple, Union
+
 from graphviz import Digraph
-from typing import List, Tuple, Set, Optional, Union, Any
 
 
 class Op(ABC):

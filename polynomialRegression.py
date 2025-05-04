@@ -1,6 +1,7 @@
-import numpy as np
-import matplotlib.pyplot as plt
 import random
+
+import matplotlib.pyplot as plt
+import numpy as np
 from Value import Value
 
 
