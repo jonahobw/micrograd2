@@ -1,3 +1,10 @@
+"""A micrograd implementation for automatic differentiation, adapted from Karpathy.
+
+This module provides a simple implementation of automatic differentiation
+using a computational graph. It supports basic mathematical operations
+and common activation functions used in neural networks.
+"""
+
 import math
 from abc import ABC, abstractmethod
 from typing import List, Optional, Set, Tuple, Union
@@ -6,88 +13,90 @@ from graphviz import Digraph
 
 
 class Op(ABC):
-    """Base class for all operations in the computational graph.
+    """Base class for all operations in the computational graph."""
 
-    Attributes:
-        operands: List of input values for the operation
-        numArgs: Number of expected operands
-        opName: String identifier for the operation
-    """
-
-    def __init__(self, operands: List["Value"], numArgs: int) -> None:
+    def __init__(self, operands: List["Value"], num_args: int) -> None:
         super().__init__()
-        assert len(operands) == numArgs
+        assert len(operands) == num_args
         self.operands: List["Value"] = operands
-        self.opName: str = ""
+        self.op_name: str = ""
 
     @abstractmethod
     def forward(self) -> float:
-        """Compute the forward pass of the operation.
-
-        Returns:
-            float: The result of the operation
-        """
-        pass
+        """Compute the forward pass of the operation."""
+        raise NotImplementedError
 
     @abstractmethod
     def backward(self, prev_grad: float = 1.0) -> None:
-        """Compute the backward pass (gradient) of the operation.
-
-        Args:
-            prev_grad: The gradient from the next operation in the graph
-        """
-        pass
+        """Compute the backward pass (gradient) of the operation."""
+        raise NotImplementedError
 
 
 class IdentityOp(Op):
-    def __init__(self, operand):
-        super().__init__([operand], 1)
-        self.opName = "identity"
+    """Identity operation that returns its input unchanged."""
 
-    def forward(self):
+    def __init__(self, operand: "Value") -> None:
+        super().__init__([operand], 1)
+        self.op_name = "identity"
+
+    def forward(self) -> float:
+        """Return the input value unchanged."""
         return self.operands[0].val
 
-    def backward(self, prev_grad=1):
-        self.operands[0] += prev_grad
+    def backward(self, prev_grad: float = 1.0) -> None:
+        """Pass the gradient through unchanged."""
+        self.operands[0].grad += prev_grad
 
 
 class AddOp(Op):
-    def __init__(self, operands):
+    """Addition operation that sums its inputs."""
+
+    def __init__(self, operands: List["Value"]) -> None:
         super().__init__(operands, 2)
-        self.opName = "+"
+        self.op_name = "+"
 
-    def forward(self):
-        return sum([x.val for x in self.operands])
+    def forward(self) -> float:
+        """Sum the input values."""
+        return sum(x.val for x in self.operands)
 
-    def backward(self, prev_grad=1):
+    def backward(self, prev_grad: float = 1.0) -> None:
+        """Distribute the gradient equally to all inputs."""
         for value in self.operands:
             value.grad += prev_grad
 
 
 class MulOp(Op):
-    def __init__(self, operands):
+    """Multiplication operation that multiplies its inputs."""
+
+    def __init__(self, operands: List["Value"]) -> None:
         super().__init__(operands, 2)
-        self.opName = "*"
+        self.op_name = "*"
 
-    def forward(self):
-        return math.prod([x.val for x in self.operands])
+    def forward(self) -> float:
+        """Multiply the input values."""
+        return math.prod(x.val for x in self.operands)
 
-    def backward(self, prev_grad=1):
+    def backward(self, prev_grad: float = 1.0) -> None:
+        """Apply the chain rule for multiplication."""
         self.operands[0].grad += prev_grad * self.operands[1].val
         self.operands[1].grad += prev_grad * self.operands[0].val
 
 
 class DivOp(Op):
-    def __init__(self, operands):
-        super().__init__(operands, 2)
-        self.opName = "/"
+    """Division operation that divides its inputs."""
 
-    def forward(self):
+    def __init__(self, operands: List["Value"]) -> None:
+        super().__init__(operands, 2)
+        self.op_name = "/"
+
+    def forward(self) -> float:
+        """Divide the first input by the second."""
         if self.operands[1].val == 0:
             raise ValueError("Division by zero is not allowed")
         return self.operands[0].val / self.operands[1].val
 
-    def backward(self, prev_grad=1):
+    def backward(self, prev_grad: float = 1.0) -> None:
+        """Apply the chain rule for division."""
         if self.operands[1].val == 0:
             raise ValueError("Cannot compute gradient for division by zero")
         values = [x.val for x in self.operands]
@@ -96,58 +105,74 @@ class DivOp(Op):
 
 
 class PowOp(Op):
-    def __init__(self, operand, exponent):
+    """Power operation that raises a value to a power."""
+
+    def __init__(self, operand: "Value", exponent: Union[float, int]) -> None:
         super().__init__([operand], 1)
-        self.opName = f"^{exponent}"
+        self.op_name = f"^{exponent}"
         self.exponent = exponent
 
-    def forward(self):
+    def forward(self) -> float:
+        """Raise the input to the specified power."""
         return self.operands[0].val ** self.exponent
 
-    def backward(self, prev_grad=1):
-        n = self.exponent
-        a = self.operands[0].val
-        if a == 0.0 and n <= 0:
+    def backward(self, prev_grad: float = 1.0) -> None:
+        """Apply the chain rule for power."""
+        exp = self.exponent
+        activation = self.operands[0].val
+        if activation == 0.0 and exp <= 0:
             return  # cannot raise 0 to a negative power
-        self.operands[0].grad += prev_grad * n * (a ** (n - 1))
+        self.operands[0].grad += prev_grad * exp * (activation ** (exp - 1))
 
 
 class ReluOp(Op):
-    def __init__(self, operand):
-        super().__init__([operand], 1)
-        self.opName = "ReLU"
+    """Rectified Linear Unit activation function."""
 
-    def forward(self):
+    def __init__(self, operand: "Value") -> None:
+        super().__init__([operand], 1)
+        self.op_name = "ReLU"
+
+    def forward(self) -> float:
+        """Apply ReLU activation."""
         return max(0, self.operands[0].val)
 
-    def backward(self, prev_grad=1):
+    def backward(self, prev_grad: float = 1.0) -> None:
+        """Apply the gradient for ReLU."""
         if self.operands[0].val > 0:
             self.operands[0].grad += prev_grad
 
 
 class SigmoidOp(Op):
-    def __init__(self, operand):
+    """Sigmoid activation function."""
+
+    def __init__(self, operand: "Value") -> None:
         super().__init__([operand], 1)
-        self.opName = "Sigmoid"
+        self.op_name = "Sigmoid"
         self.memory = None
 
-    def forward(self):
+    def forward(self) -> float:
+        """Apply sigmoid activation."""
         self.memory = 1 / (1 + math.exp(-self.operands[0].val))
         return self.memory
 
-    def backward(self, prev_grad=1):
+    def backward(self, prev_grad: float = 1.0) -> None:
+        """Apply the gradient for sigmoid."""
         self.operands[0].grad += prev_grad * self.memory * (1 - self.memory)
 
 
 class AbsOp(Op):
-    def __init__(self, operand):
-        super().__init__([operand], 1)
-        self.opName = "abs"
+    """Absolute value operation."""
 
-    def forward(self):
+    def __init__(self, operand: "Value") -> None:
+        super().__init__([operand], 1)
+        self.op_name = "abs"
+
+    def forward(self) -> float:
+        """Compute absolute value."""
         return abs(self.operands[0].val)
 
-    def backward(self, prev_grad=1):
+    def backward(self, prev_grad: float = 1.0) -> None:
+        """Apply the gradient for absolute value."""
         if self.operands[0].val > 0:
             self.operands[0].grad += prev_grad
         elif self.operands[0].val < 0:
@@ -155,79 +180,37 @@ class AbsOp(Op):
 
 
 class Value:
-    """Represents a value in the computational graph with automatic differentiation.
-
-    Attributes:
-        val: The numerical value
-        op: The operation that produced this value
-        children: Tuple of child values in the computational graph
-        grad: The gradient of this value
-        name: Unique identifier for this value
-    """
-
-    varNum: int = 0
-    varNames: Set[str] = set()
+    """Represents a value in the computational graph with automatic differentiation."""
 
     def __init__(
         self,
         val: Union[int, float],
-        op: Optional[Op] = None,
+        operation: Optional[Op] = None,
         children: Tuple["Value", ...] = (),
         name: Optional[str] = None,
     ) -> None:
         self.val: float = float(val)
         assert isinstance(self.val, (int, float)), "Value must be a number"
-        self.op: Op = op if op else IdentityOp(self)
+        self.operation: Op = operation if operation else IdentityOp(self)
         self.children: Tuple["Value", ...] = children
         self.grad: float = 0.0
-        self.setName(name)
-
-    def setName(self, name: Optional[str]) -> None:
-        """Set a unique name for this value.
-
-        Args:
-            name: Optional name to use. If None, generates a unique name.
-
-        Returns:
-            str: The assigned name
-
-        Raises:
-            ValueError: If the requested name is already in use
-        """
-        # remove old name
-        if hasattr(self, "name") and self.name in self.varNames:
-            self.varNames.remove(self.name)
-
-        if name is None:
-            name = f"v{Value.varNum}"
-            Value.varNum += 1
-
-        if name in self.varNames:
-            # raise ValueError(f"Name {name} already exists.")
-            RuntimeWarning(f"Name {name} already exists.")
-        self.varNames.add(name)
-
-        self.name = name
+        self.name: str = name  # Initialize name attribute
 
     def detach(self) -> None:
-        """Detach this value from the computational graph.
-
-        This removes all references to children and sets the operation to identity.
-        Also cleans up the name from varNames.
-        """
-        if self.name in self.varNames:
-            self.varNames.remove(self.name)
-        self.op = IdentityOp(self)
+        """Detach this value from the computational graph."""
+        self.operation = IdentityOp(self)
         self.children = ()
         self.grad = 0.0
 
-    def reset_grad(self, recursively=True):
+    def reset_grad(self, recursively: bool = True) -> None:
+        """Reset the gradient of this value and optionally its children."""
         self.grad = 0
         if recursively:
             for child in self.children:
                 child.reset_grad(recursively=True)
 
-    def topologicalSort(self):
+    def topological_sort(self) -> List["Value"]:
+        """Perform a topological sort of the computational graph."""
         seen = set()
         values = []
 
@@ -241,141 +224,140 @@ class Value:
         dfs(self)
         return values
 
-    def forward(self, recursively=True):
+    def forward(self, recursively: bool = True) -> float:
+        """Compute the forward pass of this value."""
         if not recursively:
-            self.val = self.op.forward()
+            self.val = self.operation.forward()
             return self.val
 
-        values = self.topologicalSort()
+        values = self.topological_sort()
 
         for value in values:
             value.forward(recursively=False)
         return self.val
 
-    def backward(self, prev_grad=1):
+    def backward(self, prev_grad: float = 1.0) -> None:
+        """Compute the backward pass (gradient) of this value."""
         self.grad = prev_grad
 
-        values = self.topologicalSort()
+        values = self.topological_sort()
 
         for value in reversed(values):
-            value.op.backward(prev_grad=value.grad)
+            value.operation.backward(prev_grad=value.grad)
 
-    def relu(self):
-        new_val = Value(0, op=ReluOp(self), children=(self,))
+    def relu(self) -> "Value":
+        """Apply ReLU activation to this value."""
+        new_val = Value(0, operation=ReluOp(self), children=(self,))
         new_val.forward(recursively=False)
         return new_val
 
-    def sigmoid(self):
-        new_val = Value(0, op=SigmoidOp(self), children=(self,))
+    def sigmoid(self) -> "Value":
+        """Apply sigmoid activation to this value."""
+        new_val = Value(0, operation=SigmoidOp(self), children=(self,))
         new_val.forward(recursively=False)
         return new_val
 
-    def abs(self):
-        new_val = Value(0, op=AbsOp(self), children=(self,))
+    def abs(self) -> "Value":
+        """Apply absolute value to this value."""
+        new_val = Value(0, operation=AbsOp(self), children=(self,))
         new_val.forward(recursively=False)
         return new_val
 
-    def __add__(self, other):
+    def __add__(self, other: Union["Value", float, int]) -> "Value":
+        """Add this value with another value or number."""
         other = other if isinstance(other, Value) else Value(other)
-        new_val = Value(0, op=AddOp((self, other)), children=(self, other))
+        new_val = Value(0, operation=AddOp((self, other)), children=(self, other))
         new_val.forward(recursively=False)
         return new_val
 
-    def __mul__(self, other):
+    def __mul__(self, other: Union["Value", float, int]) -> "Value":
+        """Multiply this value with another value or number."""
         other = other if isinstance(other, Value) else Value(other)
-        new_val = Value(0, op=MulOp((self, other)), children=(self, other))
+        new_val = Value(0, operation=MulOp((self, other)), children=(self, other))
         new_val.forward(recursively=False)
         return new_val
 
-    def __truediv__(self, other):
+    def __truediv__(self, other: Union["Value", float, int]) -> "Value":
+        """Divide this value by another value or number."""
         other = other if isinstance(other, Value) else Value(other)
-        new_val = Value(0, op=DivOp((self, other)), children=(self, other))
+        new_val = Value(0, operation=DivOp((self, other)), children=(self, other))
         new_val.forward(recursively=False)
         return new_val
 
-    def __pow__(self, exponent):
-        new_val = Value(0, op=PowOp(self, exponent), children=(self,))
+    def __pow__(self, exponent: Union[float, int]) -> "Value":
+        """Raise this value to a power."""
+        new_val = Value(0, operation=PowOp(self, exponent), children=(self,))
         new_val.forward(recursively=False)
         return new_val
 
-    def __neg__(self):
+    def __neg__(self) -> "Value":
+        """Negate this value."""
         return self * -1
 
-    def __radd__(self, other):
+    def __radd__(self, other: Union[float, int]) -> "Value":
+        """Add a number to this value (right addition)."""
         return self + other
 
-    def __sub__(self, other):
+    def __sub__(self, other: Union["Value", float, int]) -> "Value":
+        """Subtract another value or number from this value."""
         return self + (-other)
 
-    def __rsub__(self, other):
+    def __rsub__(self, other: Union[float, int]) -> "Value":
+        """Subtract this value from a number (right subtraction)."""
         return other + (-self)
 
-    def __rmul__(self, other):
+    def __rmul__(self, other: Union[float, int]) -> "Value":
+        """Multiply a number with this value (right multiplication)."""
         return self * other
 
-    def __rtruediv__(self, other):  # other / self
+    def __rtruediv__(self, other: Union[float, int]) -> "Value":
+        """Divide a number by this value (right division)."""
         return other * self**-1
 
-    def draw_dot(root, format="png", rankdir="LR"):
-        """Draw the computational graph using graphviz.
-
-        Args:
-            format: Output format (png, svg, etc.)
-            rankdir: Graph direction (LR for left-to-right, TB for top-to-bottom)
-
-        Returns:
-            Digraph: The graphviz dot object
-        """
+    def draw_dot(self, output_format: str = "png", rankdir: str = "LR") -> Digraph:
+        """Draw the computational graph using graphviz."""
         assert rankdir in ["LR", "TB"]
-        nodes, edges = trace(root)
-        dot = Digraph(format=format, graph_attr={"rankdir": rankdir})
+        nodes, edges = trace(self)
+        dot = Digraph(format=output_format, graph_attr={"rankdir": rankdir})
 
-        for n in nodes:
+        for node in nodes:
             dot.node(
-                name=str(id(n)),
-                label="{ %s | val %.4f | grad %.4f }" % (n.name, n.val, n.grad),
+                name=str(id(node)),
+                label=f"{{ {node.name} | val {node.val:.4f} | grad {node.grad:.4f} }}",
                 shape="record",
             )
-            if not isinstance(n.op, IdentityOp):
+            if not isinstance(node.operation, IdentityOp):
                 dot.node(
-                    name=str(id(n)) + n.op.opName, label=n.op.opName, shape="ellipse"
+                    name=str(id(node)) + node.operation.op_name,
+                    label=node.operation.op_name,
+                    shape="ellipse",
                 )
-                dot.edge(str(id(n)) + n.op.opName, str(id(n)))
+                dot.edge(str(id(node)) + node.operation.op_name, str(id(node)))
 
-        for n1, n2 in edges:
-            dot.edge(str(id(n1)), str(id(n2)) + n2.op.opName)
+        for node1, node2 in edges:
+            dot.edge(str(id(node1)), str(id(node2)) + node2.operation.op_name)
 
         return dot
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """Return a string representation of this value."""
         return f"{self.name}: value={self.val:.4f}, grad={self.grad:.4f}"
 
-    @classmethod
-    def cleanup(cls) -> None:
-        """Clean up all variable names and reset the counter.
 
-        This should be called when you want to start fresh with a new graph.
-        """
-        cls.varNames.clear()
-        cls.varNum = 0
-
-
-def trace(root):
-    """Trace the computational graph.
-
-    Args:
-        root: The root value of the graph
-
-    Returns:
-        Tuple[Set[Value], Set[Tuple[Value, Value]]]: Nodes and edges of the graph
-    """
+def trace(root: Value, set_names: bool = True) -> Tuple[Set[Value], Set[Tuple[Value, Value]]]:
+    """Trace the computational graph."""
     nodes, edges = set(), set()
+    idx = 0
 
-    def build(v):
-        if v not in nodes:
-            nodes.add(v)
-            for child in v.children:
-                edges.add((child, v))
+    def build(node: Value) -> None:
+        nonlocal idx
+        if node not in nodes:
+            nodes.add(node)
+            if node.name == "" and set_names:
+                node.name = f"v{idx}"
+                idx += 1
+            for child in node.children:
+                edges.add((child, node))
                 build(child)
 
     build(root)
@@ -383,22 +365,26 @@ def trace(root):
 
 
 if __name__ == "__main__":
-    a = Value(2, name="a")
-    b = Value(3, name="b")
-    c = a - b
-    d = a * b
-    e = c / d
-    f = e**2
+    # Create some values
+    value_a = Value(2, name="a")
+    value_b = Value(3, name="b")
+    value_c = value_a - value_b
+    value_d = value_a * value_b
+    value_e = value_c / value_d
+    value_f = value_e**2
 
-    f.forward()
-    f.backward()
+    # Compute forward and backward passes
+    value_f.forward()
+    value_f.backward()
 
-    print(f)
-    print(a)
-    print(b)
-    print(c)
-    print(d)
-    print(e)
+    # Print results
+    print(value_f)
+    print(value_a)
+    print(value_b)
+    print(value_c)
+    print(value_d)
+    print(value_e)
 
-    dot = Value.draw_dot(f, format="png", rankdir="LR")
-    dot.render("graph", view=True)
+    # Draw the computational graph
+    graph = value_f.draw_dot(output_format="png", rankdir="LR")
+    graph.render("graph", view=True)
