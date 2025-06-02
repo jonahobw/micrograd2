@@ -45,7 +45,7 @@ class IdentityOp(Op):
 
     def backward(self, prev_grad: float = 1.0) -> None:
         """Pass the gradient through unchanged."""
-        self.operands[0].grad += prev_grad
+        self.operands[0].grad = prev_grad
 
 
 class AddOp(Op):
@@ -107,10 +107,10 @@ class DivOp(Op):
 class PowOp(Op):
     """Power operation that raises a value to a power."""
 
-    def __init__(self, operand: "Value", exponent: Union[float, int]) -> None:
+    def __init__(self, operand: "Value", exponent: Union[float, int, "Value"]) -> None:
         super().__init__([operand], 1)
         self.op_name = f"^{exponent}"
-        self.exponent = exponent
+        self.exponent = exponent if isinstance(exponent, (float, int)) else exponent.val
 
     def forward(self) -> float:
         """Raise the input to the specified power."""
@@ -185,7 +185,7 @@ class Value:
     def __init__(
         self,
         val: Union[int, float],
-        operation: Optional[Op] = None,
+        operation: Op = None,
         children: Tuple["Value", ...] = (),
         name: Optional[str] = None,
     ) -> None:
@@ -194,7 +194,7 @@ class Value:
         self.operation: Op = operation if operation else IdentityOp(self)
         self.children: Tuple["Value", ...] = children
         self.grad: float = 0.0
-        self.name: str = name  # Initialize name attribute
+        self.name: str = name
 
     def detach(self) -> None:
         """Detach this value from the computational graph."""
@@ -362,29 +362,3 @@ def trace(root: Value, set_names: bool = True) -> Tuple[Set[Value], Set[Tuple[Va
 
     build(root)
     return nodes, edges
-
-
-if __name__ == "__main__":
-    # Create some values
-    value_a = Value(2, name="a")
-    value_b = Value(3, name="b")
-    value_c = value_a - value_b
-    value_d = value_a * value_b
-    value_e = value_c / value_d
-    value_f = value_e**2
-
-    # Compute forward and backward passes
-    value_f.forward()
-    value_f.backward()
-
-    # Print results
-    print(value_f)
-    print(value_a)
-    print(value_b)
-    print(value_c)
-    print(value_d)
-    print(value_e)
-
-    # Draw the computational graph
-    graph = value_f.draw_dot(output_format="png", rankdir="LR")
-    graph.render("graph", view=True)

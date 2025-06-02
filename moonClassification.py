@@ -1,3 +1,7 @@
+"""
+A simple moon classification example using micrograd2, adapted from Andrej Karpathy's micrograd.
+"""
+
 import random
 
 import matplotlib.pyplot as plt
@@ -5,10 +9,10 @@ import numpy as np
 from sklearn.datasets import make_moons
 
 from micrograd2.nn import MLP
-from micrograd2.Value import Value
+from micrograd2.value import Value
 
-np.random.seed(1337)
-random.seed(1337)
+# np.random.seed(1337)
+# random.seed(1337)
 
 X, y = make_moons(n_samples=100, noise=0.1)
 

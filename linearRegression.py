@@ -1,13 +1,13 @@
 """
-A simple linear regression example using micrograd
+A simple linear regression example using micrograd2, as a sanity check.
 """
 
 import matplotlib.pyplot as plt
 import numpy as np
-from micrograd.Value import Value
+from micrograd2.value import Value
 
 # Generate random data
-np.random.seed(42)
+# np.random.seed(42)
 X = 2 * np.random.rand(100, 1)
 
 # m_true and b_true are random values between -10 and 10
@@ -37,7 +37,7 @@ for epoch in range(num_epochs):
     for (x_data, y_data) in zip(X, Y):
         x.val = x_data
         y.val = y_data
-        loss.reset()
+        loss.reset_grad()
         loss.forward()
         loss.backward()
         w.val -= learning_rate * w.grad
